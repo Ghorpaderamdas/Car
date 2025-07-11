@@ -6,19 +6,25 @@ import com.UberDragons.project.uber.UberApp.dto.DriverDto;
 import com.UberDragons.project.uber.UberApp.dto.RideDto;
 import com.UberDragons.project.uber.UberApp.dto.RideStartDto;
 import com.UberDragons.project.uber.UberApp.dto.RiderDto;
+import com.UberDragons.project.uber.UberApp.dto.RideRequestDto;
 import com.UberDragons.project.uber.UberApp.services.DriverService;
+import com.UberDragons.project.uber.UberApp.services.RideRequestService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
+
 @RestController
 @RequiredArgsConstructor
-@RequestMapping("/drivers")
+@RequestMapping("/api/drivers")
+@CrossOrigin(origins = "http://localhost:5173", allowCredentials = true)
 public class DriverController {
 
     private final DriverService driverService;
+    private final RideRequestService rideRequestService;
 
     @PostMapping("/acceptRide/{rideRequestId}")
     public ResponseEntity<RideDto> acceptRide(@PathVariable Long rideRequestId) {
@@ -59,6 +65,9 @@ public class DriverController {
         return ResponseEntity.ok(driverService.getAllMyRides(pageRequest));
     }
 
-
+    @GetMapping("/availableRides")
+    public ResponseEntity<List<RideRequestDto>> getAvailableRides() {
+        // Mock implementation - in real app, get pending ride requests
+        return ResponseEntity.ok(List.of());
+    }
 }
-

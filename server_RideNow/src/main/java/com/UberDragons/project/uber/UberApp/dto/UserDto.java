@@ -11,8 +11,9 @@ import java.util.Set;
 @AllArgsConstructor
 @NoArgsConstructor
 public class UserDto {
-
+    private Long id;
     private String name;
     private String email;
-    private Set<Role> roles; // Use Role enum here
+    private String phoneNumber;
+    private Set<Role> roles;
 }

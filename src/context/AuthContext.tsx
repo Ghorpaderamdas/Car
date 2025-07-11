@@ -56,7 +56,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       localStorage.setItem('accessToken', accessToken);
       setToken(accessToken);
       
-      // Fetch user data separately since backend doesn't return user in login response
+      // Fetch user data separately
       try {
         const userResponse = await authAPI.getUserByEmail(email);
         console.log('✅ User data:', userResponse.data);
@@ -68,12 +68,25 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         toast.success('Login successful!');
       } catch (userError) {
         console.warn('⚠️ Could not fetch user data:', userError);
-        toast.error('Login successful but could not fetch user data');
+        // Create a basic user object from login info
+        const basicUser: UserDto = {
+          id: 0,
+          name: email.split('@')[0],
+          email: email,
+          phoneNumber: '',
+          roles: ['RIDER'] // Default role
+        };
+        localStorage.setItem('user', JSON.stringify(basicUser));
+        setUser(basicUser);
+        toast.success('Login successful!');
       }
       
     } catch (error: any) {
       console.error('❌ Login error:', error);
-      toast.error(error.response?.data?.message || 'Login failed');
+      const errorMessage = error.response?.data?.message || 
+                          error.response?.data?.error?.message || 
+                          'Login failed';
+      toast.error(errorMessage);
       throw error;
     }
   };
@@ -94,7 +107,10 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       toast.success('Signup successful! Please login.');
     } catch (error: any) {
       console.error('❌ Signup error:', error);
-      toast.error(error.response?.data?.message || 'Signup failed');
+      const errorMessage = error.response?.data?.message || 
+                          error.response?.data?.error?.message || 
+                          'Signup failed';
+      toast.error(errorMessage);
       throw error;
     }
   };

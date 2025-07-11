@@ -19,6 +19,7 @@ const api = axios.create({
   headers: {
     'Content-Type': 'application/json',
   },
+  withCredentials: true, // Important for cookies
 });
 
 // 🔐 Attach access token automatically
@@ -28,6 +29,7 @@ api.interceptors.request.use(
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
+    console.log('🔗 API Request:', config.method?.toUpperCase(), config.url, config.headers);
     return config;
   },
   (error) => Promise.reject(error)
@@ -35,26 +37,29 @@ api.interceptors.request.use(
 
 // 🔁 Handle 401 + try refresh
 api.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    console.log('✅ API Response:', response.status, response.config.url);
+    return response;
+  },
   async (error) => {
+    console.error('❌ API Error:', error.response?.status, error.config?.url, error.response?.data);
+    
     const originalRequest = error.config;
 
     if (error.response?.status === 401 && !originalRequest._retry) {
       originalRequest._retry = true;
 
       try {
-        const refreshToken = localStorage.getItem('refreshToken');
-        if (refreshToken) {
-          const { data } = await axios.post<LoginResponseDto>(`${API_BASE_URL}/api/auth/refresh`, {
-            refreshToken,
-          });
+        const { data } = await axios.post<LoginResponseDto>(`${API_BASE_URL}/api/auth/refresh`, {}, {
+          withCredentials: true
+        });
 
-          localStorage.setItem('accessToken', data.accessToken);
-          return api(originalRequest);
-        }
+        localStorage.setItem('accessToken', data.accessToken);
+        originalRequest.headers.Authorization = `Bearer ${data.accessToken}`;
+        return api(originalRequest);
       } catch (refreshError) {
+        console.error('❌ Refresh token failed:', refreshError);
         localStorage.removeItem('accessToken');
-        localStorage.removeItem('refreshToken');
         localStorage.removeItem('user');
         window.location.href = '/login';
       }
@@ -67,38 +72,38 @@ api.interceptors.response.use(
 // 🔐 Auth API
 export const authAPI = {
   login: (data: LoginDto) => api.post<LoginResponseDto>('/api/auth/login', data),
-  signup: (data: SignupDto) => api.post('/api/auth/signup', data),
+  signup: (data: SignupDto) => api.post<UserDto>('/api/auth/signup', data),
   getRoles: () => api.get<string[]>('/api/auth/roles'),
   onBoardDriver: (userId: string, vehicleId: string) =>
     api.post(`/api/auth/onBoardNewDriver/${userId}`, { vehicleId }),
-  refresh: (refreshToken: string) => api.post<LoginResponseDto>('/api/auth/refresh', { refreshToken }),
+  refresh: () => api.post<LoginResponseDto>('/api/auth/refresh'),
   getUserByEmail: (email: string) => api.get<UserDto>(`/api/auth/user?email=${encodeURIComponent(email)}`),
 };
 
 // 🧍 Rider API
 export const riderAPI = {
-  requestRide: (data: RideBookingDto) => api.post<RideRequestDto>('/riders/requestRide', data),
+  requestRide: (data: RideBookingDto) => api.post<RideRequestDto>('/api/riders/requestRide', data),
   getMyRides: (page = 0, size = 10) =>
-    api.get<PageRideDto>(`/riders/getMyRides?pageOffset=${page}&pageSize=${size}`),
-  getMyProfile: () => api.get<UserDto>('/riders/getMyProfile'),
+    api.get<PageRideDto>(`/api/riders/getMyRides?pageOffset=${page}&pageSize=${size}`),
+  getMyProfile: () => api.get<UserDto>('/api/riders/getMyProfile'),
   rateDriver: (rideId: string, rating: number) =>
-    api.post(`/riders/rateDriver`, { rideId, rating }),
-  cancelRide: (rideId: string) => api.post(`/riders/cancelRide/${rideId}`),
+    api.post(`/api/riders/rateDriver`, { rideId, rating }),
+  cancelRide: (rideId: string) => api.post(`/api/riders/cancelRide/${rideId}`),
 };
 
 // 🚗 Driver API
 export const driverAPI = {
-  acceptRide: (rideRequestId: string) => api.post(`/drivers/acceptRide/${rideRequestId}`),
+  acceptRide: (rideRequestId: string) => api.post(`/api/drivers/acceptRide/${rideRequestId}`),
   startRide: (rideRequestId: string, data: RideStartDto) =>
-    api.post(`/drivers/startRide/${rideRequestId}`, data),
-  endRide: (rideId: string) => api.post(`/drivers/endRide/${rideId}`),
-  cancelRide: (rideId: string) => api.post(`/drivers/cancelRide/${rideId}`),
+    api.post(`/api/drivers/startRide/${rideRequestId}`, data),
+  endRide: (rideId: string) => api.post(`/api/drivers/endRide/${rideId}`),
+  cancelRide: (rideId: string) => api.post(`/api/drivers/cancelRide/${rideId}`),
   rateRider: (rideId: string, rating: number) =>
-    api.post(`/drivers/rateRider`, { rideId, rating }),
+    api.post(`/api/drivers/rateRider`, { rideId, rating }),
   getMyRides: (page = 0, size = 10) =>
-    api.get<PageRideDto>(`/drivers/getMyRides?pageOffset=${page}&pageSize=${size}`),
-  getMyProfile: () => api.get<UserDto>('/drivers/getMyProfile'),
-  getAvailableRides: () => api.get<RideRequestDto[]>('/drivers/availableRides'),
+    api.get<PageRideDto>(`/api/drivers/getMyRides?pageOffset=${page}&pageSize=${size}`),
+  getMyProfile: () => api.get<UserDto>('/api/drivers/getMyProfile'),
+  getAvailableRides: () => api.get<RideRequestDto[]>('/api/drivers/availableRides'),
 };
 
 export default api;

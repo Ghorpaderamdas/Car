@@ -1,6 +1,5 @@
 package com.UberDragons.project.uber.UberApp.controllers;
 
-
 import com.UberDragons.project.uber.UberApp.dto.*;
 import com.UberDragons.project.uber.UberApp.services.AuthService;
 import jakarta.servlet.http.Cookie;
@@ -10,85 +9,87 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.annotation.Secured;
-import org.springframework.security.authentication.AuthenticationServiceException;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.Arrays;
 
 @RestController
-@RequestMapping("api/auth")
+@RequestMapping("/api/auth")
 @RequiredArgsConstructor
+@CrossOrigin(origins = "http://localhost:5173", allowCredentials = true)
 public class AuthController {
 
     private final AuthService authService;
 
     @PostMapping("/signup")
-    ResponseEntity<UserDto> signUp(@RequestBody SignupDto signupDto) {
+    public ResponseEntity<UserDto> signUp(@RequestBody SignupDto signupDto) {
         return new ResponseEntity<>(authService.signup(signupDto), HttpStatus.CREATED);
     }
 
     @Secured("ROLE_ADMIN")
     @PostMapping("/onBoardNewDriver/{userId}")
-    ResponseEntity<DriverDto> onBoardNewDriver(@PathVariable Long userId, @RequestBody OnboardDriverDto onboardDriverDto) {
+    public ResponseEntity<DriverDto> onBoardNewDriver(@PathVariable Long userId, @RequestBody OnboardDriverDto onboardDriverDto) {
         return new ResponseEntity<>(authService.onboardNewDriver(userId,
                 onboardDriverDto.getVehicleId()), HttpStatus.CREATED);
     }
 
-//    @PostMapping("/login")
-//    ResponseEntity<LoginResponseDto> login(@RequestBody LoginRequestDto loginRequestDto,
-//                                           HttpServletRequest httpServletRequest, HttpServletResponse httpServletResponse) {
-//        String tokens[] = authService.login(loginRequestDto.getEmail(), loginRequestDto.getPassword());
-//
-//        Cookie cookie = new Cookie("token", tokens[1]);
-//        cookie.setHttpOnly(true);
-//
-//        httpServletResponse.addCookie(cookie);
-//
-//        return ResponseEntity.ok(new LoginResponseDto(tokens[0]));
-//    }
-
     @PostMapping("/login")
-    public ResponseEntity<?> login(@RequestBody LoginRequestDto loginRequestDto,
-                                   HttpServletRequest request, HttpServletResponse response) {
+    public ResponseEntity<LoginResponseDto> login(@RequestBody LoginRequestDto loginRequestDto,
+                                                  HttpServletRequest request, HttpServletResponse response) {
         try {
             System.out.println("🔐 Login attempt for: " + loginRequestDto.getEmail());
 
             String[] tokens = authService.login(loginRequestDto.getEmail(), loginRequestDto.getPassword());
 
-            Cookie cookie = new Cookie("token", tokens[1]);
+            Cookie cookie = new Cookie("refreshToken", tokens[1]);
             cookie.setHttpOnly(true);
+            cookie.setPath("/");
+            cookie.setMaxAge(7 * 24 * 60 * 60); // 7 days
             response.addCookie(cookie);
 
             return ResponseEntity.ok(new LoginResponseDto(tokens[0]));
         } catch (Exception e) {
             System.err.println("❌ Login error: " + e.getMessage());
-            e.printStackTrace(); // 🧨 This will finally show the real backend error in console
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body("Login failed: " + e.getMessage());
+            e.printStackTrace();
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(new LoginResponseDto("Login failed: " + e.getMessage()));
         }
     }
 
     @PostMapping("/refresh")
     public ResponseEntity<LoginResponseDto> refresh(HttpServletRequest request) {
-        String refreshToken = Arrays.stream(request.getCookies()).
-                filter(cookie -> "refreshToken".equals(cookie.getName()))
-                .findFirst()
-                .map(Cookie::getValue)
-                .orElseThrow(() -> new AuthenticationServiceException("Refresh token not found inside the Cookies"));
+        try {
+            String refreshToken = Arrays.stream(request.getCookies() != null ? request.getCookies() : new Cookie[0])
+                    .filter(cookie -> "refreshToken".equals(cookie.getName()))
+                    .findFirst()
+                    .map(Cookie::getValue)
+                    .orElseThrow(() -> new RuntimeException("Refresh token not found"));
 
-        String accessToken = authService.refreshToken(refreshToken);
+            String accessToken = authService.refreshToken(refreshToken);
+            return ResponseEntity.ok(new LoginResponseDto(accessToken));
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(new LoginResponseDto("Refresh failed: " + e.getMessage()));
+        }
+    }
 
-        return ResponseEntity.ok(new LoginResponseDto(accessToken));
+    @GetMapping("/user")
+    public ResponseEntity<UserDto> getUserByEmail(@RequestParam String email) {
+        try {
+            UserDto user = authService.findByEmail(email);
+            return ResponseEntity.ok(user);
+        } catch (Exception e) {
+            return ResponseEntity.notFound().build();
+        }
     }
 
     @GetMapping("/roles")
-    public ResponseEntity<?> getUserRoles(@RequestParam String email) {
-
-        UserDto user = authService.findByEmail(email); // Or however you load user
-        if (user == null) return ResponseEntity.notFound().build();
-
-        return ResponseEntity.ok(user.getRoles()); // Or return just role list
+    public ResponseEntity<Object> getUserRoles(@RequestParam String email) {
+        try {
+            UserDto user = authService.findByEmail(email);
+            return ResponseEntity.ok(user.getRoles());
+        } catch (Exception e) {
+            return ResponseEntity.notFound().build();
+        }
     }
-
-
 }
